@@ -1,0 +1,509 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>AeroHockey</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            touch-action: none;
+        }
+        body, html {
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+        }
+        #gameFrame {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            border: none;
+            z-index: 1;
+        }
+        #gameCanvas {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 2;
+        }
+        .paddle-area {
+            position: absolute;
+            width: 100px;
+            height: 100px;
+            border-radius: 50%;
+            pointer-events: auto;
+            z-index: 3;
+            background: transparent;
+            transform: translate(-50%, -50%);
+        }
+    </style>
+</head>
+<body>
+    <iframe id="gameFrame" src="https://docs.google.com/spreadsheets/d/13__j7mik0IBs4chjSl9PD-uAFXL0VoD1/edit?usp=drivesdk&ouid=108926510173309496733&rtpof=true&sd=true" allowfullscreen></iframe>
+    <canvas id="gameCanvas"></canvas>
+    <div id="leftPaddleArea" class="paddle-area"></div>
+    <div id="rightPaddleArea" class="paddle-area"></div>
+
+    <script>
+        // Инициализация элементов
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const leftPaddleArea = document.getElementById('leftPaddleArea');
+        const rightPaddleArea = document.getElementById('rightPaddleArea');
+
+        // Настройка холста
+        function resizeCanvas() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+        }
+        resizeCanvas();
+        window.addEventListener('resize', resizeCanvas);
+
+        // Игровые объекты
+        const game = {
+            score: { left: 0, right: 0 },
+            goalHeight: 0,
+            lastTime: 0,
+            puck: {
+                x: 0,
+                y: 0,
+                radius: 20,
+                vx: 0,
+                vy: 0,
+                mass: 1.0,
+                restitution: 0.85,
+                maxSpeed: 1000
+            },
+            leftPaddle: {
+                x: 100,
+                y: 0,
+                radius: 35,
+                targetX: null,
+                targetY: null,
+                vx: 0,
+                vy: 0,
+                mass: 3.0,
+                maxSpeed: 15,
+                prevX: 100,
+                prevY: 0,
+                activeTouchId: null
+            },
+            rightPaddle: {
+                x: 0,
+                y: 0,
+                radius: 35,
+                targetX: null,
+                targetY: null,
+                vx: 0,
+                vy: 0,
+                mass: 3.0,
+                maxSpeed: 15,
+                prevX: 0,
+                prevY: 0,
+                activeTouchId: null
+            }
+        };
+
+        // === ФУНКЦИЯ ПОЛНОГО СБРОСА СОСТОЯНИЯ ИГРЫ ===
+        function resetAllTouchStates() {
+            game.leftPaddle.targetX = null;
+            game.leftPaddle.targetY = null;
+            game.leftPaddle.activeTouchId = null;
+            
+            game.rightPaddle.targetX = null;
+            game.rightPaddle.targetY = null;
+            game.rightPaddle.activeTouchId = null;
+            
+            touchTracker.leftTouchId = null;
+            touchTracker.rightTouchId = null;
+        }
+
+        // === ФУНКЦИЯ СБРОСА ТОЛЬКО ШАЙБЫ (БЕЗ СБРОСА БИТ) ===
+        function resetPuck() {
+            game.puck.x = canvas.width / 2;
+            game.puck.y = canvas.height / 2;
+            game.puck.vx = 0;
+            game.puck.vy = 0;
+        }
+
+        // Инициализация игры
+        function initGame() {
+            game.goalHeight = canvas.height / 3;
+            resetPuck();
+
+            game.leftPaddle.x = 100;
+            game.leftPaddle.y = canvas.height / 2;
+            game.leftPaddle.prevX = game.leftPaddle.x;
+            game.leftPaddle.prevY = game.leftPaddle.y;
+
+            game.rightPaddle.x = canvas.width - 100;
+            game.rightPaddle.y = canvas.height / 2;
+            game.rightPaddle.prevX = game.rightPaddle.x;
+            game.rightPaddle.prevY = game.rightPaddle.y;
+            
+            // Сброс состояния касаний при полной инициализации игры
+            resetAllTouchStates();
+        }
+
+        // === ПОЛНОСТЬЮ ПЕРЕРАБОТАННАЯ МУЛЬТИТАЧ ЛОГИКА ===
+        // Объект для отслеживания активных касаний
+        const touchTracker = {
+            leftTouchId: null,
+            rightTouchId: null,
+            
+            // Определение, к какой зоне относится касание
+            getTouchArea: function(touchX, touchY) {
+                // Проверяем левую зону
+                const leftRect = leftPaddleArea.getBoundingClientRect();
+                const leftCenterX = leftRect.left + leftRect.width/2;
+                const leftCenterY = leftRect.top + leftRect.height/2;
+                const leftDx = touchX - leftCenterX;
+                const leftDy = touchY - leftCenterY;
+                const leftDistance = Math.sqrt(leftDx*leftDx + leftDy*leftDy);
+                
+                // Проверяем правую зону
+                const rightRect = rightPaddleArea.getBoundingClientRect();
+                const rightCenterX = rightRect.left + rightRect.width/2;
+                const rightCenterY = rightRect.top + rightRect.height/2;
+                const rightDx = touchX - rightCenterX;
+                const rightDy = touchY - rightCenterY;
+                const rightDistance = Math.sqrt(rightDx*rightDx + rightDy*rightDy);
+                
+                // Критическое исправление: касание принимается только если оно внутри зоны
+                const maxDistance = 50;
+                
+                // Если касание в пределах зоны левой биты и зона свободна
+                if (leftDistance < maxDistance && this.leftTouchId === null) {
+                    return 'left';
+                }
+                
+                // Если касание в пределах зоны правой биты и зона свободна
+                if (rightDistance < maxDistance && this.rightTouchId === null) {
+                    return 'right';
+                }
+                
+                // Если касание в пределах зоны левой биты, но она уже занята
+                if (leftDistance < maxDistance && this.leftTouchId !== null) {
+                    return 'left';
+                }
+                
+                // Если касание в пределах зоны правой биты, но она уже занята
+                if (rightDistance < maxDistance && this.rightTouchId !== null) {
+                    return 'right';
+                }
+                
+                // Касание вне зон управления
+                return null;
+            },
+            
+            // Сброс всех касаний
+            reset: function() {
+                this.leftTouchId = null;
+                this.rightTouchId = null;
+                resetAllTouchStates();
+            }
+        };
+
+        // Обработчики касаний
+        function handleTouchStart(e) {
+            e.preventDefault();
+            const rect = canvas.getBoundingClientRect();
+            
+            // Обрабатываем все новые касания
+            for (let i = 0; i < e.touches.length; i++) {
+                const touch = e.touches[i];
+                const touchX = touch.clientX;
+                const touchY = touch.clientY;
+                
+                // Критическое исправление: проверка на уже активные касания
+                if (game.leftPaddle.activeTouchId === touch.identifier || 
+                    game.rightPaddle.activeTouchId === touch.identifier) {
+                    continue;
+                }
+                
+                // Определяем, к какой зоне относится касание
+                const area = touchTracker.getTouchArea(touchX, touchY);
+                
+                // Если касание вне зон управления, пропускаем
+                if (area === null) continue;
+                
+                // Сохраняем ID касания для зоны
+                if (area === 'left') {
+                    touchTracker.leftTouchId = touch.identifier;
+                    game.leftPaddle.activeTouchId = touch.identifier;
+                    game.leftPaddle.targetX = touchX - rect.left;
+                    game.leftPaddle.targetY = touchY - rect.top;
+                } else if (area === 'right') {
+                    touchTracker.rightTouchId = touch.identifier;
+                    game.rightPaddle.activeTouchId = touch.identifier;
+                    game.rightPaddle.targetX = touchX - rect.left;
+                    game.rightPaddle.targetY = touchY - rect.top;
+                }
+            }
+        }
+
+        function handleTouchMove(e) {
+            e.preventDefault();
+            const rect = canvas.getBoundingClientRect();
+            
+            // Обрабатываем все активные касания
+            for (let i = 0; i < e.touches.length; i++) {
+                const touch = e.touches[i];
+                const touchX = touch.clientX - rect.left;
+                const touchY = touch.clientY - rect.top;
+                
+                // Проверяем, принадлежит ли это касание левой бите
+                if (game.leftPaddle.activeTouchId === touch.identifier) {
+                    game.leftPaddle.targetX = touchX;
+                    game.leftPaddle.targetY = touchY;
+                }
+                
+                // Проверяем, принадлежит ли это касание правой бите
+                if (game.rightPaddle.activeTouchId === touch.identifier) {
+                    game.rightPaddle.targetX = touchX;
+                    game.rightPaddle.targetY = touchY;
+                }
+            }
+        }
+
+        function handleTouchEnd(e) {
+            // Обрабатываем завершенные касания
+            for (let i = 0; i < e.changedTouches.length; i++) {
+                const touch = e.changedTouches[i];
+                
+                // Сбрасываем левую биту, если завершилось её касание
+                if (game.leftPaddle.activeTouchId === touch.identifier) {
+                    game.leftPaddle.targetX = null;
+                    game.leftPaddle.targetY = null;
+                    game.leftPaddle.activeTouchId = null;
+                    touchTracker.leftTouchId = null;
+                }
+                
+                // Сбрасываем правую биту, если завершилось её касание
+                if (game.rightPaddle.activeTouchId === touch.identifier) {
+                    game.rightPaddle.targetX = null;
+                    game.rightPaddle.targetY = null;
+                    game.rightPaddle.activeTouchId = null;
+                    touchTracker.rightTouchId = null;
+                }
+            }
+        }
+
+        // Добавляем обработчики
+        document.addEventListener('touchstart', handleTouchStart, { passive: false });
+        document.addEventListener('touchmove', handleTouchMove, { passive: false });
+        document.addEventListener('touchend', handleTouchEnd);
+        document.addEventListener('touchcancel', handleTouchEnd);
+
+        // Обновление позиций зон управления
+        function updatePaddleAreas() {
+            leftPaddleArea.style.left = `${game.leftPaddle.x}px`;
+            leftPaddleArea.style.top = `${game.leftPaddle.y}px`;
+
+            rightPaddleArea.style.left = `${game.rightPaddle.x}px`;
+            rightPaddleArea.style.top = `${game.rightPaddle.y}px`;
+        }
+
+        // ПОЛНОСТЬЮ ПЕРЕДЕЛАННАЯ ФИЗИКА СТОЛКНОВЕНИЙ
+        function handleCollision(puck, paddle, deltaTime) {
+            const dx = puck.x - paddle.x;
+            const dy = puck.y - paddle.y;
+            const distance = Math.sqrt(dx * dx + dy * dy);
+            const minDistance = puck.radius + paddle.radius;
+
+            if (distance >= minDistance) return false;
+
+            const nx = dx / distance;
+            const ny = dy / distance;
+
+            const paddleVx = (paddle.x - paddle.prevX) / deltaTime;
+            const paddleVy = (paddle.y - paddle.prevY) / deltaTime;
+
+            const relativeVelocityX = puck.vx - paddleVx;
+            const relativeVelocityY = puck.vy - paddleVy;
+            const speed = relativeVelocityX * nx + relativeVelocityY * ny;
+
+            if (speed > 0) return false;
+
+            const e = puck.restitution;
+            const totalMassInv = 1/puck.mass + 1/paddle.mass;
+            const impulse = -(1 + e) * speed / totalMassInv;
+
+            const impulseX = impulse * nx;
+            const impulseY = impulse * ny;
+
+            puck.vx += impulseX / puck.mass;
+            puck.vy += impulseY / puck.mass;
+
+            const overlap = minDistance - distance + 0.5;
+            puck.x += nx * overlap;
+            puck.y += ny * overlap;
+
+            return true;
+        }
+
+        // Проверка коллизий со стенами
+        function checkWallCollisions() {
+            if (game.puck.y - game.puck.radius < 0) {
+                game.puck.vy = Math.abs(game.puck.vy) * game.puck.restitution;
+                game.puck.y = game.puck.radius;
+            } else if (game.puck.y + game.puck.radius > canvas.height) {
+                game.puck.vy = -Math.abs(game.puck.vy) * game.puck.restitution;
+                game.puck.y = canvas.height - game.puck.radius;
+            }
+
+            // === ИЗМЕНЕНИЕ: ПРИ ГОЛЕ СБРАСЫВАЕМ ТОЛЬКО ШАЙБУ В ЦЕНТР ===
+            if (game.puck.x - game.puck.radius < 0) {
+                const inGoal = game.puck.y > (canvas.height - game.goalHeight)/2 &&
+                               game.puck.y < (canvas.height + game.goalHeight)/2;
+                if (inGoal) {
+                    game.score.right++;
+                    resetPuck();
+                } else {
+                    game.puck.vx = Math.abs(game.puck.vx) * game.puck.restitution;
+                    game.puck.x = game.puck.radius;
+                }
+            }
+
+            if (game.puck.x + game.puck.radius > canvas.width) {
+                const inGoal = game.puck.y > (canvas.height - game.goalHeight)/2 &&
+                               game.puck.y < (canvas.height + game.goalHeight)/2;
+                if (inGoal) {
+                    game.score.left++;
+                    resetPuck();
+                } else {
+                    game.puck.vx = -Math.abs(game.puck.vx) * game.puck.restitution;
+                    game.puck.x = canvas.width - game.puck.radius;
+                }
+            }
+        }
+
+        // Основной игровой цикл
+        function gameLoop(timestamp) {
+            const deltaTime = (timestamp - game.lastTime) / 1000;
+            game.lastTime = timestamp;
+
+            game.leftPaddle.prevX = game.leftPaddle.x;
+            game.leftPaddle.prevY = game.leftPaddle.y;
+            game.rightPaddle.prevX = game.rightPaddle.x;
+            game.rightPaddle.prevY = game.rightPaddle.y;
+
+            // Обновление позиций бит
+            [game.leftPaddle, game.rightPaddle].forEach(paddle => {
+                if (paddle.targetX !== null && paddle.targetY !== null) {
+                    const dx = paddle.targetX - paddle.x;
+                    const dy = paddle.targetY - paddle.y;
+                    const distance = Math.sqrt(dx*dx + dy*dy);
+                    paddle.x=paddle.targetX;
+                    paddle.y=paddle.targetY;
+                    /*if (distance > 0.1) {
+                        const moveSpeed = Math.min(paddle.maxSpeed, distance);
+                        paddle.x += dx / distance * moveSpeed;
+                        paddle.y += dy / distance * moveSpeed;
+
+                        paddle.x = Math.max(paddle.radius, Math.min(canvas.width - paddle.radius, paddle.x));
+                        paddle.y = Math.max(paddle.radius, Math.min(canvas.height - paddle.radius, paddle.y));
+                    }*/
+                }
+            });
+
+            game.puck.x += game.puck.vx * deltaTime;
+            game.puck.y += game.puck.vy * deltaTime;
+
+            const speed = Math.sqrt(game.puck.vx*game.puck.vx + game.puck.vy*game.puck.vy);
+            if (speed > game.puck.maxSpeed) {
+                game.puck.vx = (game.puck.vx / speed) * game.puck.maxSpeed;
+                game.puck.vy = (game.puck.vy / speed) * game.puck.maxSpeed;
+            }
+
+            checkWallCollisions();
+            handleCollision(game.puck, game.leftPaddle, deltaTime);
+            handleCollision(game.puck, game.rightPaddle, deltaTime);
+
+            // Рендеринг
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // === ОБОЗНАЧЕНИЕ ВОРОТ ТОНКИМИ ГОРИЗОНТАЛЬНЫМИ ЧЕРТАМИ ===
+            const goalLineLength = 30;
+            const goalLineWidth = 3;
+            
+            // Левые ворота
+            ctx.strokeStyle = '#4a86e8';
+            ctx.lineWidth = goalLineWidth;
+            ctx.beginPath();
+            ctx.moveTo(0, (canvas.height - game.goalHeight)/2);
+            ctx.lineTo(goalLineLength, (canvas.height - game.goalHeight)/2);
+            ctx.stroke();
+            
+            ctx.beginPath();
+            ctx.moveTo(0, (canvas.height + game.goalHeight)/2);
+            ctx.lineTo(goalLineLength, (canvas.height + game.goalHeight)/2);
+            ctx.stroke();
+            
+            // Правые ворота
+            ctx.strokeStyle = '#e06666';
+            ctx.beginPath();
+            ctx.moveTo(canvas.width, (canvas.height - game.goalHeight)/2);
+            ctx.lineTo(canvas.width - goalLineLength, (canvas.height - game.goalHeight)/2);
+            ctx.stroke();
+            
+            ctx.beginPath();
+            ctx.moveTo(canvas.width, (canvas.height + game.goalHeight)/2);
+            ctx.lineTo(canvas.width - goalLineLength, (canvas.height + game.goalHeight)/2);
+            ctx.stroke();
+
+            // Шайба
+            ctx.beginPath();
+            ctx.arc(game.puck.x, game.puck.y, game.puck.radius, 0, Math.PI * 2);
+            ctx.fillStyle = 'rgba(255, 100, 100, 0.9)';
+            ctx.fill();
+
+            // Биты
+            ctx.beginPath();
+            ctx.arc(game.leftPaddle.x, game.leftPaddle.y, game.leftPaddle.radius, 0, Math.PI * 2);
+            ctx.fillStyle = 'rgba(100, 100, 255, 0.8)';
+            ctx.fill();
+
+            ctx.beginPath();
+            ctx.arc(game.rightPaddle.x, game.rightPaddle.y, game.rightPaddle.radius, 0, Math.PI * 2);
+            ctx.fill();
+
+            // === СЧЁТ С ПОЛУПРОЗРАЧНОСТЬЮ И РАСПОЛОЖЕННЫЙ ВЫШЕ ===
+            const scoreYPosition = 25; // Выше на экране
+            
+            ctx.font = 'bold 48px Arial';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            
+            // Левый счёт (полупрозрачный)
+            ctx.fillStyle = 'rgba(74, 134, 232, 0.7)'; // Синий с прозрачностью
+            ctx.strokeStyle = 'rgba(0, 0, 0, 0.5)'; // Чёрная обводка с прозрачностью
+            ctx.lineWidth = 3;
+            ctx.strokeText(game.score.left, canvas.width * 0.25, scoreYPosition);
+            ctx.fillText(game.score.left, canvas.width * 0.25, scoreYPosition);
+            
+            // Правый счёт (полупрозрачный)
+            ctx.fillStyle = 'rgba(224, 102, 102, 0.7)'; // Красный с прозрачностью
+            ctx.strokeText(game.score.right, canvas.width * 0.75, scoreYPosition);
+            ctx.fillText(game.score.right, canvas.width * 0.75, scoreYPosition);
+
+            // Обновление зон управления
+            updatePaddleAreas();
+
+            requestAnimationFrame(gameLoop);
+        }
+
+        // Запуск игры
+        initGame();
+        game.lastTime = performance.now();
+        requestAnimationFrame(gameLoop);
+    </script>
+</body>
+</html>
