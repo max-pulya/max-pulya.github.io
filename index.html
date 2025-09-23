@@ -65,7 +65,7 @@
         }
         resizeCanvas();
         window.addEventListener('resize', resizeCanvas);
-
+        let scale=3;
         // Игровые объекты
         const game = {
             score: { left: 0, right: 0 },
@@ -74,7 +74,7 @@
             puck: {
                 x: 0,
                 y: 0,
-                radius: 20,
+                radius: 20*scale,
                 vx: 0,
                 vy: 0,
                 mass: 1.0,
@@ -84,7 +84,7 @@
             leftPaddle: {
                 x: 100,
                 y: 0,
-                radius: 35,
+                radius: 35*scale,
                 targetX: null,
                 targetY: null,
                 vx: 0,
@@ -98,7 +98,7 @@
             rightPaddle: {
                 x: 0,
                 y: 0,
-                radius: 35,
+                radius: 35*scale,
                 targetX: null,
                 targetY: null,
                 vx: 0,
