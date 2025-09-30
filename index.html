@@ -418,10 +418,10 @@
             game.puck.y += game.puck.vy * deltaTime;
 
             const speed = Math.sqrt(game.puck.vx*game.puck.vx + game.puck.vy*game.puck.vy);
-            if (speed > game.puck.maxSpeed) {
+            /*if (speed > game.puck.maxSpeed) {
                 game.puck.vx = (game.puck.vx / speed) * game.puck.maxSpeed;
                 game.puck.vy = (game.puck.vy / speed) * game.puck.maxSpeed;
-            }
+            }*/
 
             checkWallCollisions();
             handleCollision(game.puck, game.leftPaddle, deltaTime);
