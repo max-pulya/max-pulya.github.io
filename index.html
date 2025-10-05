@@ -65,7 +65,7 @@
         }
         resizeCanvas();
         window.addEventListener('resize', resizeCanvas);
-        let scale=3;
+        const scale=3;
         // Игровые объекты
         const game = {
             score: { left: 0, right: 0 },
@@ -78,7 +78,7 @@
                 vx: 0,
                 vy: 0,
                 mass: 1.0,
-                restitution: 0.85,
+                restitution: 0.95,
                 maxSpeed: 1000
             },
             leftPaddle: {
@@ -413,7 +413,7 @@
                     }*/
                 }
             });
-
+            
             game.puck.x += game.puck.vx * deltaTime;
             game.puck.y += game.puck.vy * deltaTime;
 
@@ -431,11 +431,11 @@
             ctx.clearRect(0, 0, canvas.width, canvas.height);
 
             // === ОБОЗНАЧЕНИЕ ВОРОТ ТОНКИМИ ГОРИЗОНТАЛЬНЫМИ ЧЕРТАМИ ===
-            const goalLineLength = 30;
-            const goalLineWidth = 3;
+            const goalLineLength = 150;
+            const goalLineWidth = 5;
             
             // Левые ворота
-            ctx.strokeStyle = '#4a86e8';
+            ctx.strokeStyle = '#00FF00';
             ctx.lineWidth = goalLineWidth;
             ctx.beginPath();
             ctx.moveTo(0, (canvas.height - game.goalHeight)/2);
@@ -448,7 +448,7 @@
             ctx.stroke();
             
             // Правые ворота
-            ctx.strokeStyle = '#e06666';
+            ctx.strokeStyle = '#FF0000';
             ctx.beginPath();
             ctx.moveTo(canvas.width, (canvas.height - game.goalHeight)/2);
             ctx.lineTo(canvas.width - goalLineLength, (canvas.height - game.goalHeight)/2);
@@ -462,35 +462,37 @@
             // Шайба
             ctx.beginPath();
             ctx.arc(game.puck.x, game.puck.y, game.puck.radius, 0, Math.PI * 2);
-            ctx.fillStyle = 'rgba(255, 100, 100, 0.9)';
+            ctx.fillStyle = 'rgba(100, 100, 255, 0.9)';
             ctx.fill();
 
             // Биты
             ctx.beginPath();
             ctx.arc(game.leftPaddle.x, game.leftPaddle.y, game.leftPaddle.radius, 0, Math.PI * 2);
-            ctx.fillStyle = 'rgba(100, 100, 255, 0.8)';
+            ctx.fillStyle = 'rgba(100, 255, 100, 0.8)';
             ctx.fill();
 
             ctx.beginPath();
+            ctx.fillStyle = 'rgba(255, 100, 100, 0.8)';
             ctx.arc(game.rightPaddle.x, game.rightPaddle.y, game.rightPaddle.radius, 0, Math.PI * 2);
             ctx.fill();
 
             // === СЧЁТ С ПОЛУПРОЗРАЧНОСТЬЮ И РАСПОЛОЖЕННЫЙ ВЫШЕ ===
             const scoreYPosition = 25; // Выше на экране
             
-            ctx.font = 'bold 48px Arial';
+            ctx.font = 'bold 48px Consolas';
             ctx.textAlign = 'center';
             ctx.textBaseline = 'middle';
             
             // Левый счёт (полупрозрачный)
-            ctx.fillStyle = 'rgba(74, 134, 232, 0.7)'; // Синий с прозрачностью
-            ctx.strokeStyle = 'rgba(0, 0, 0, 0.5)'; // Чёрная обводка с прозрачностью
-            ctx.lineWidth = 3;
+            ctx.fillStyle = 'rgba(250, 250, 250, 1)'; // Ярко-синий неон
+            ctx.strokeStyle = 'rgba(0, 140, 0, 1)'; 
+            ctx.lineWidth = 7;
             ctx.strokeText(game.score.left, canvas.width * 0.25, scoreYPosition);
             ctx.fillText(game.score.left, canvas.width * 0.25, scoreYPosition);
             
             // Правый счёт (полупрозрачный)
-            ctx.fillStyle = 'rgba(224, 102, 102, 0.7)'; // Красный с прозрачностью
+            ctx.fillStyle = 'rgba(255, 250, 250, 1)'; // Ярко-красный неон
+            ctx.strokeStyle = 'rgba(140, 0, 0, 1)'; 
             ctx.strokeText(game.score.right, canvas.width * 0.75, scoreYPosition);
             ctx.fillText(game.score.right, canvas.width * 0.75, scoreYPosition);
 
