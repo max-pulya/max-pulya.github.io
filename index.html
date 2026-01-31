@@ -496,6 +496,11 @@
             ctx.strokeText(game.score.right, canvas.width * 0.75, scoreYPosition);
             ctx.fillText(game.score.right, canvas.width * 0.75, scoreYPosition);
 
+            ctx.fillStyle = 'rgba(255, 250, 250, 1)'; // Ярко-красный неон
+            ctx.strokeStyle = 'rgba(140, 0, 0, 1)'; 
+            ctx.strokeText("С днем самоуправления.\n Аерохокей вернулся.\n max-pulya", canvas.width * 0.25, canvas.height*0.75);
+            ctx.fillText("С днем самоуправления.\n Аерохокей вернулся.\n max-pulya", canvas.width * 0.25, canvas.height*0.75);
+
             // Обновление зон управления
             updatePaddleAreas();
 
