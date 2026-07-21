@@ -2,6 +2,9 @@
 <html><head>
 <script>
 let adress=prompt("Введите URL")
+if (!adress.startsWith('http://') && !adress.startsWith('https://')) {
+        adress = 'https://' + adress;
+    }
 window.location.href = adress;
 
 </script>
