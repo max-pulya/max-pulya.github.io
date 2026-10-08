@@ -6,4 +6,5 @@ AI WARNING: КОД НАПИСАН НЕЙРОСЕТЬЮ QWEN. АВТОР НЕ З�
 [Запустить](https://max-pulya.github.io/game.html)
 
 startpage.html и ytlogo.png страничка для проекта (https://github.com/max-pulya/FullscreenWebview)
+
 Другие файлы - это файлы с других проектов и другие веб страницы
